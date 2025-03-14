@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Cybertruck Space Flappy</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: black; }
+        canvas { 
+            display: block; 
+            position: fixed;
+            z-index: 1;
+        }
+        #score, #highScore {
+            position: fixed;
+            left: 20px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 32px;  /* Increased font size */
+            z-index: 1000;  /* Ensure it's above everything */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);  /* Stronger shadow */
+            pointer-events: none;  /* Make sure it doesn't interfere with clicks */
+        }
+        #score { top: 20px; }
+        #highScore { 
+            top: 60px;
+            color: #FFD700;  /* Gold color for high score */
+            font-weight: bold;  /* Make it bold */
+        }
+        #banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            color: #FF4500;
+            font-family: Arial, sans-serif;
+            font-size: 24px;
+            padding: 10px 0;
+            text-align: center;
+            white-space: nowrap;
+            z-index: 100;
+            overflow: hidden;
+        }
+        #bannerText {
+            display: inline-block;
+            animation: scroll-left 20s linear infinite;
+        }
+        @keyframes scroll-left {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        #gameOver, #startScreen {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 32px;
+            text-align: center;
+            z-index: 100;
+            display: none;
+        }
+        #instructions {
+            font-size: 20px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="banner">
+        <div id="bannerText">🚀 NEXT STOP: MARS! SpaceX is taking humanity to the Red Planet 🌎 → 🔴</div>
+    </div>
+    <div id="score">Score: 0</div>
+    <div id="highScore">Best: 0</div>
+    <div id="gameOver">
+        Game Over!<br>
+        Press R to restart
+    </div>
+    <div id="startScreen">
+        Cybertruck Space Flappy<br>
+        <div id="instructions">
+            Press SPACE or UP to fly<br>
+            Avoid the Trump obstacles<br>
+            Press SPACE to start
+        </div>
+    </div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+<script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Set camera position
+    camera.position.z = 15;  // Moved camera back
+    camera.position.y = 0;   // Centered vertically
+    camera.position.x = 0;   // Centered horizontally
+
+    // Starry background
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsMaterial = new THREE.PointsMaterial({color: 0xffffff, size: 0.1});
+    const starVertices = [];
+    for (let i = 0; i < 1000; i++) {
+        starVertices.push(
+            Math.random() * 200 - 100,
+            Math.random() * 200 - 100,
+            Math.random() * 200 - 100
+        );
+    }
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
+
+    // Cybertruck
+    const truckGroup = new THREE.Group();
+
+    // Main body
+    const bodyGeometry = new THREE.BoxGeometry(2, 0.8, 1);
+    const bodyMaterial = new THREE.MeshPhongMaterial({
+        color: 0xC0C0C0,
+        shininess: 100,
+        specular: 0x333333
+    });
+    const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    truckGroup.add(body);
+
+    // Top part (angular roof)
+    const roofGeometry = new THREE.BufferGeometry();
+    const roofVertices = new Float32Array([
+        // Front triangle
+        -0.7, 0.4, 0.5,    // front left
+        0.7, 0.4, 0.5,     // front right
+        0, 0.8, 0,         // top center
+        
+        // Back triangle
+        -0.7, 0.4, -0.5,   // back left
+        0.7, 0.4, -0.5,    // back right
+        0, 0.8, 0,         // top center
+        
+        // Side panels
+        -0.7, 0.4, 0.5,    // front left
+        -0.7, 0.4, -0.5,   // back left
+        0, 0.8, 0,         // top center
+        
+        0.7, 0.4, 0.5,     // front right
+        0.7, 0.4, -0.5,    // back right
+        0, 0.8, 0          // top center
+    ]);
+    roofGeometry.setAttribute('position', new THREE.BufferAttribute(roofVertices, 3));
+    roofGeometry.computeVertexNormals();
+    const roof = new THREE.Mesh(roofGeometry, bodyMaterial);
+    truckGroup.add(roof);
+
+    // Wheels
+    const wheelGeometry = new THREE.CylinderGeometry(0.2, 0.2, 0.1, 16);
+    const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x333333 });
+    
+    const wheelPositions = [
+        [-0.7, -0.4, 0.5],  // front left
+        [0.7, -0.4, 0.5],   // front right
+        [-0.7, -0.4, -0.5], // back left
+        [0.7, -0.4, -0.5]   // back right
+    ];
+
+    wheelPositions.forEach(position => {
+        const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+        wheel.position.set(...position);
+        wheel.rotation.z = Math.PI / 2;
+        truckGroup.add(wheel);
+    });
+
+    // Add headlights
+    const lightGeometry = new THREE.BoxGeometry(0.1, 0.05, 0.2);
+    const lightMaterial = new THREE.MeshPhongMaterial({ 
+        color: 0xFFFFFF,
+        emissive: 0xFFFFFF,
+        emissiveIntensity: 0.5
+    });
+
+    const leftLight = new THREE.Mesh(lightGeometry, lightMaterial);
+    leftLight.position.set(1, -0.2, 0.4);
+    truckGroup.add(leftLight);
+
+    const rightLight = new THREE.Mesh(lightGeometry, lightMaterial);
+    rightLight.position.set(1, -0.2, -0.4);
+    truckGroup.add(rightLight);
+
+    truckGroup.position.set(-8, 0, 0);
+    scene.add(truckGroup);
+
+    // Add lighting
+    const ambientLight = new THREE.AmbientLight(0x808080, 1);  // Brighter ambient light
+    scene.add(ambientLight);
+    
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);  // Brighter directional light
+    directionalLight.position.set(0, 0, 10);  // Light from camera direction
+    scene.add(directionalLight);
+
+    // Add point lights for better obstacle visibility
+    const pointLight1 = new THREE.PointLight(0xffffff, 2, 50);  // Increased intensity, reduced distance
+    pointLight1.position.set(5, 0, 10);
+    scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0xffffff, 1, 50);
+    pointLight2.position.set(-5, 0, 10);
+    scene.add(pointLight2);
+
+    // Add Mars in the background
+    const marsGeometry = new THREE.SphereGeometry(50, 64, 64);
+    const marsTexture = new THREE.TextureLoader().load('https://space-assets-1.s3.amazonaws.com/mars_texture.jpg');
+    const marsMaterial = new THREE.MeshPhongMaterial({
+        map: marsTexture,
+        emissive: 0x330000,
+        emissiveIntensity: 0.2
+    });
+    const mars = new THREE.Mesh(marsGeometry, marsMaterial);
+    mars.position.set(30, 0, -100);
+    scene.add(mars);
+
+    // Background floating objects
+    const floatingObjects = [];
+    
+    // Materials for floating objects
+    const xLogoMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFFFFFF,
+        shininess: 100,
+        emissive: 0xFFFFFF,
+        emissiveIntensity: 0.4,
+        specular: 0x666666
+    });
+
+    const dogeMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFFD700,  // Gold color for Dogecoin
+        shininess: 100,
+        emissive: 0xAA8800,
+        emissiveIntensity: 0.3,
+        specular: 0xFFFFFF
+    });
+
+    const teslaRedMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFF0000,
+        shininess: 100,
+        emissive: 0x660000,
+        emissiveIntensity: 0.3,
+        specular: 0xFFFFFF
+    });
+
+    function createXLogo() {
+        const group = new THREE.Group();
+        
+        // Create X using beveled boxes for better 3D look
+        const stroke1 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 2, 0.2),
+            xLogoMaterial
+        );
+        stroke1.rotation.z = Math.PI * 0.25;
+        group.add(stroke1);
+
+        const stroke2 = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 2, 0.2),
+            xLogoMaterial
+        );
+        stroke2.rotation.z = -Math.PI * 0.25;
+        group.add(stroke2);
+
+        // Add circular background
+        const circle = new THREE.Mesh(
+            new THREE.CylinderGeometry(1.2, 1.2, 0.1, 32),
+            new THREE.MeshPhongMaterial({
+                color: 0x000000,
+                emissive: 0x222222,
+                emissiveIntensity: 0.5,
+                shininess: 80
+            })
+        );
+        circle.rotation.x = Math.PI * 0.5;
+        circle.position.z = -0.1;
+        group.add(circle);
+
+        return group;
+    }
+
+    function createDogecoin() {
+        const group = new THREE.Group();
+        
+        // Main coin with better geometry
+        const coin = new THREE.Mesh(
+            new THREE.CylinderGeometry(1, 1, 0.15, 32),
+            dogeMaterial
+        );
+        coin.rotation.x = Math.PI * 0.5;
+        group.add(coin);
+
+        // Detailed rim
+        const rim = new THREE.Mesh(
+            new THREE.TorusGeometry(1, 0.08, 16, 32),
+            new THREE.MeshPhongMaterial({
+                color: 0xFFA500,
+                emissive: 0x884400,
+                emissiveIntensity: 0.3,
+                shininess: 90
+            })
+        );
+        rim.rotation.x = Math.PI * 0.5;
+        group.add(rim);
+
+        // Stylized D letter
+        const dLetter = new THREE.Mesh(
+            new THREE.TorusGeometry(0.4, 0.08, 16, 32, Math.PI),
+            new THREE.MeshPhongMaterial({
+                color: 0x8B4513,
+                emissive: 0x442200,
+                emissiveIntensity: 0.3,
+                shininess: 80
+            })
+        );
+        dLetter.position.set(-0.2, 0, 0.1);
+        dLetter.rotation.x = Math.PI * 0.5;
+        group.add(dLetter);
+
+        return group;
+    }
+
+    function createTeslaCar() {
+        const group = new THREE.Group();
+        
+        // Sleek car body
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(2.5, 0.6, 1.2),
+            teslaRedMaterial
+        );
+        group.add(body);
+
+        // Curved roof using custom geometry
+        const roofShape = new THREE.Shape();
+        roofShape.moveTo(-1, 0);
+        roofShape.quadraticCurveTo(0, 0.8, 1, 0);
+        const roofGeometry = new THREE.ExtrudeGeometry(roofShape, {
+            steps: 1,
+            depth: 1.1,
+            bevelEnabled: true,
+            bevelThickness: 0.1,
+            bevelSize: 0.1,
+            bevelSegments: 3
+        });
+        const roof = new THREE.Mesh(roofGeometry, teslaRedMaterial);
+        roof.position.set(0, 0.3, -0.55);
+        roof.scale.set(0.8, 1, 1);
+        group.add(roof);
+
+        // Tinted windows
+        const windowMaterial = new THREE.MeshPhongMaterial({
+            color: 0x000000,
+            shininess: 100,
+            emissive: 0x222222,
+            emissiveIntensity: 0.5,
+            opacity: 0.7,
+            transparent: true
+        });
+
+        const windshield = new THREE.Mesh(
+            new THREE.PlaneGeometry(1.2, 0.6),
+            windowMaterial
+        );
+        windshield.position.set(0.2, 0.5, 0.61);
+        windshield.rotation.x = Math.PI * 0.1;
+        group.add(windshield);
+
+        // Wheels with better detail
+        const wheelPositions = [
+            [-0.8, -0.3, 0.6],
+            [0.8, -0.3, 0.6],
+            [-0.8, -0.3, -0.6],
+            [0.8, -0.3, -0.6]
+        ];
+
+        wheelPositions.forEach(pos => {
+            // Tire
+            const tire = new THREE.Mesh(
+                new THREE.TorusGeometry(0.2, 0.08, 16, 24),
+                new THREE.MeshPhongMaterial({
+                    color: 0x222222,
+                    emissive: 0x111111,
+                    emissiveIntensity: 0.2,
+                    shininess: 60
+                })
+            );
+            tire.position.set(...pos);
+            tire.rotation.y = Math.PI * 0.5;
+            group.add(tire);
+
+            // Hub cap
+            const hubCap = new THREE.Mesh(
+                new THREE.CircleGeometry(0.12, 16),
+                new THREE.MeshPhongMaterial({
+                    color: 0xCCCCCC,
+                    emissive: 0x666666,
+                    emissiveIntensity: 0.3,
+                    shininess: 90
+                })
+            );
+            hubCap.position.set(pos[0], pos[1], pos[2] + (pos[2] > 0 ? 0.09 : -0.09));
+            hubCap.rotation.y = Math.PI * 0.5;
+            group.add(hubCap);
+        });
+
+        return group;
+    }
+
+    function createChainsaw() {
+        const group = new THREE.Group();
+        
+        // Handle with better ergonomics
+        const handleShape = new THREE.Shape();
+        handleShape.moveTo(0, 0);
+        handleShape.lineTo(0.4, 0);
+        handleShape.lineTo(0.3, 0.8);
+        handleShape.lineTo(0.1, 0.8);
+        handleShape.lineTo(0, 0);
+
+        const handleGeometry = new THREE.ExtrudeGeometry(handleShape, {
+            steps: 1,
+            depth: 0.3,
+            bevelEnabled: true,
+            bevelThickness: 0.05,
+            bevelSize: 0.05,
+            bevelSegments: 3
+        });
+
+        const handle = new THREE.Mesh(
+            handleGeometry,
+            new THREE.MeshPhongMaterial({ 
+                color: 0x444444,
+                emissive: 0x222222,
+                emissiveIntensity: 0.3,
+                shininess: 70
+            })
+        );
+        handle.rotation.y = Math.PI * 0.5;
+        group.add(handle);
+
+        // Main body
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 0.4, 0.3),
+            new THREE.MeshPhongMaterial({ 
+                color: 0x666666,
+                emissive: 0x333333,
+                emissiveIntensity: 0.3,
+                shininess: 80
+            })
+        );
+        body.position.x = 1;
+        group.add(body);
+
+        // Blade with chain track
+        const bladeBase = new THREE.Mesh(
+            new THREE.BoxGeometry(1.2, 0.1, 0.05),
+            new THREE.MeshPhongMaterial({ 
+                color: 0x888888,
+                emissive: 0x444444,
+                emissiveIntensity: 0.4,
+                metalness: 0.9,
+                shininess: 90
+            })
+        );
+        bladeBase.position.x = 2;
+        group.add(bladeBase);
+
+        // Chain with more realistic look
+        const chainShape = new THREE.Shape();
+        for(let i = 0; i < 8; i++) {
+            chainShape.moveTo(i * 0.15, 0);
+            chainShape.lineTo(i * 0.15 + 0.1, 0.05);
+            chainShape.lineTo(i * 0.15, 0.1);
+        }
+
+        const chainGeometry = new THREE.ExtrudeGeometry(chainShape, {
+            steps: 1,
+            depth: 0.05,
+            bevelEnabled: false
+        });
+
+        const chain = new THREE.Mesh(
+            chainGeometry,
+            new THREE.MeshPhongMaterial({ 
+                color: 0xCCCCCC,
+                emissive: 0x666666,
+                emissiveIntensity: 0.4,
+                metalness: 0.9,
+                shininess: 100
+            })
+        );
+        chain.position.set(1.4, -0.05, 0.03);
+        group.add(chain);
+
+        return group;
+    }
+
+    function addFloatingObject() {
+        const objectTypes = [createXLogo, createDogecoin, createTeslaCar, createChainsaw];
+        const randomType = objectTypes[Math.floor(Math.random() * objectTypes.length)];
+        const object = randomType();
+
+        // Position objects at the top with random x positions
+        object.position.set(
+            Math.random() * 60 - 30,  // x: -30 to 30
+            15,                       // y: start from top
+            Math.random() * 10 - 25   // z: -25 to -15, varied depth
+        );
+
+        // Keep objects more upright for better visibility
+        object.rotation.set(
+            Math.random() * Math.PI * 0.2,  // Even less x rotation
+            Math.random() * Math.PI * 2,    // Full y rotation
+            Math.random() * Math.PI * 0.2   // Even less z rotation
+        );
+
+        // Make objects smaller
+        object.scale.set(0.8, 0.8, 0.8);
+
+        // Movement focused on falling with more natural motion
+        const movement = {
+            rotationSpeed: (Math.random() - 0.5) * 0.01,  // Slower rotation
+            fallSpeed: -0.03 - Math.random() * 0.03,      // Slower falling
+            wobbleSpeed: 0.01 + Math.random() * 0.01,     // Varied wobble speed
+            wobbleAmount: Math.random()                    // Less extreme wobble
+        };
+
+        scene.add(object);
+        floatingObjects.push({ object, movement });
+    }
+
+    // Update floating objects animation
+    function updateFloatingObjects() {
+        floatingObjects.forEach((obj, index) => {
+            // Rotate
+            obj.object.rotation.x += obj.movement.rotationSpeed;
+            obj.object.rotation.y += obj.movement.rotationSpeed;
+            
+            // Fall down with slight wobble
+            obj.object.position.y += obj.movement.fallSpeed;
+            obj.object.position.x += Math.sin(Date.now() * 0.001 * obj.movement.wobbleSpeed) * 0.02 * obj.movement.wobbleAmount;
+
+            // If object goes below screen, reset to top
+            if (obj.object.position.y < -15) {
+                obj.object.position.y = 15;  // Reset to top
+                obj.object.position.x = Math.random() * 60 - 30;  // Random x position
+                obj.movement.fallSpeed = -0.03 - Math.random() * 0.03;  // New random fall speed
+                obj.movement.fallSpeed = -0.05 - Math.random() * 0.05;  // New random fall speed
+                obj.movement.wobbleAmount = Math.random() * 2;  // New random wobble
+            }
+        });
+    }
+
+    // Add initial floating objects
+    for (let i = 0; i < 25; i++) {  // More objects for better coverage
+        addFloatingObject();
+    }
+
+    // Obstacles
+    const obstacles = [];
+    const skinMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFFD5B3,  // Peach skin tone
+        shininess: 30,
+        emissive: 0x331111,
+        emissiveIntensity: 0.1
+    });
+
+    const suitMaterial = new THREE.MeshPhongMaterial({
+        color: 0x000033,  // Dark navy suit
+        shininess: 60,
+        emissive: 0x000011,
+        emissiveIntensity: 0.1
+    });
+
+    const hairMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFFD700,  // Golden yellow
+        shininess: 40,
+        emissive: 0x332200,
+        emissiveIntensity: 0.2
+    });
+
+    const redTieMaterial = new THREE.MeshPhongMaterial({
+        color: 0xFF0000,  // Bright red
+        shininess: 70,
+        emissive: 0x330000,
+        emissiveIntensity: 0.2
+    });
+
+    function createDancingTrump() {
+        const group = new THREE.Group();
+
+        // Body - wider for suit
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(1.6, 2.2, 1),
+            suitMaterial
+        );
+        body.position.y = 0.2;
+        group.add(body);
+
+        // Head
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5, 32, 32),
+            skinMaterial
+        );
+        head.position.y = 1.7;
+        head.scale.set(1.2, 1, 1);  // Wider face
+        group.add(head);
+
+        // Signature hair - multiple layers
+        const hairTop = new THREE.Mesh(
+            new THREE.BoxGeometry(1.3, 0.3, 0.9),
+            hairMaterial
+        );
+        hairTop.position.set(0, 2.1, 0);
+        hairTop.rotation.z = Math.PI * 0.05;  // Slight tilt
+        group.add(hairTop);
+
+        // Hair sweep
+        const hairSweep = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 0.4, 0.8),
+            hairMaterial
+        );
+        hairSweep.position.set(-0.2, 1.9, 0);
+        hairSweep.rotation.z = Math.PI * 0.15;
+        group.add(hairSweep);
+
+        // Red tie
+        const tie = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.8, 0.1),
+            redTieMaterial
+        );
+        tie.position.set(0, 0.5, 0.5);
+        group.add(tie);
+
+        // Arms
+        const leftArm = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 1.2, 0.4),
+            suitMaterial
+        );
+        leftArm.position.set(-1, 0.5, 0);
+        leftArm.rotation.z = Math.PI * 0.15;
+        group.add(leftArm);
+
+        const rightArm = new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 1.2, 0.4),
+            suitMaterial
+        );
+        rightArm.position.set(1, 0.5, 0);
+        rightArm.rotation.z = -Math.PI * 0.15;
+        group.add(rightArm);
+
+        // Hands - slightly smaller
+        const leftHand = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 16, 16),
+            skinMaterial
+        );
+        leftHand.position.set(-1.2, 0, 0);
+        group.add(leftHand);
+
+        const rightHand = new THREE.Mesh(
+            new THREE.SphereGeometry(0.15, 16, 16),
+            skinMaterial
+        );
+        rightHand.position.set(1.2, 0, 0);
+        group.add(rightHand);
+
+        // Legs
+        const leftLeg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 1.4, 0.5),
+            suitMaterial
+        );
+        leftLeg.position.set(-0.4, -1, 0);
+        group.add(leftLeg);
+
+        const rightLeg = new THREE.Mesh(
+            new THREE.BoxGeometry(0.5, 1.4, 0.5),
+            suitMaterial
+        );
+        rightLeg.position.set(0.4, -1, 0);
+        group.add(rightLeg);
+
+        // Scale the entire figure
+        group.scale.set(1.3, 1.3, 1.3);
+
+        return group;
+    }
+
+    function createObstacle() {
+        const gap = 6;  // Increased gap for better playability
+        const height = Math.random() * 2 - 1;  // Reduced height range
+        
+        const topTrump = createDancingTrump();
+        topTrump.position.set(10, height + gap + 2, 0);
+        
+        const bottomTrump = createDancingTrump();
+        bottomTrump.position.set(10, height - gap - 2, 0);
+        bottomTrump.rotation.x = Math.PI;  // Flip bottom Trump upside down
+        
+        obstacles.push({
+            top: topTrump,
+            bottom: bottomTrump,
+            scored: false,
+            animationOffset: Math.random() * Math.PI * 2
+        });
+        
+        scene.add(topTrump, bottomTrump);
+    }
+
+    // Game variables
+    let velocity = 0;
+    const gravity = -0.015;
+    const jump = 0.4;
+    let gameOver = false;
+    let gameStarted = false;
+    let score = 0;
+    let lastObstacleTime = 0;
+    const obstacleSpawnInterval = 2.5;
+    const obstacleSpeed = 0.06;
+    const cleanupThreshold = -15;
+    const scoreElement = document.getElementById('score');
+    const highScoreElement = document.getElementById('highScore');
+    const gameOverElement = document.getElementById('gameOver');
+    const startScreenElement = document.getElementById('startScreen');
+
+    // Load high score from localStorage
+    let highScore = parseInt(localStorage.getItem('flappyTruckHighScore')) || 0;
+    highScoreElement.textContent = `Best: ${highScore}`;
+
+    // Show start screen initially
+    startScreenElement.style.display = 'block';
+    scoreElement.style.display = 'none';
+    highScoreElement.style.display = 'block';  // Always show high score
+    
+    // Add the renderer's canvas with correct z-index
+    renderer.domElement.style.zIndex = '1';
+    document.body.appendChild(renderer.domElement);
+
+    // Controls
+    document.addEventListener('keydown', (event) => {
+        if ((event.code === 'Space' || event.code === 'ArrowUp')) {
+            if (!gameStarted) {
+                startGame();
+            } else if (!gameOver) {
+                velocity = jump;
+            }
+            event.preventDefault();
+        }
+        if (event.code === 'KeyR' && gameOver) {
+            resetGame();
+        }
+    });
+
+    // Touch controls for mobile
+    document.addEventListener('touchstart', (event) => {
+        if (!gameStarted) {
+            startGame();
+        } else if (!gameOver) {
+            velocity = jump;
+        }
+        event.preventDefault();
+    });
+
+    function startGame() {
+        gameStarted = true;
+        startScreenElement.style.display = 'none';
+        scoreElement.style.display = 'block';
+        highScoreElement.style.display = 'block';  // Make sure high score is visible
+        lastObstacleTime = Date.now() * 0.001;
+        velocity = jump; // Give an initial upward boost
+    }
+
+    // Game loop
+    function animate() {
+        requestAnimationFrame(animate);
+
+        // Rotate Mars slowly
+        mars.rotation.y += 0.0005;
+
+        // Always rotate stars for visual effect
+        stars.rotation.z += 0.001;
+
+        // Update floating objects
+        updateFloatingObjects();
+
+        if (!gameStarted) {
+            // Make the truck float gently up and down when game hasn't started
+            truckGroup.position.y = Math.sin(Date.now() * 0.002) * 0.5;
+            renderer.render(scene, camera);
+            return;
+        }
+
+        if (!gameOver) {
+            // Truck physics
+            velocity += gravity;
+            truckGroup.position.y += velocity;
+
+            // Add truck rotation based on velocity
+            truckGroup.rotation.z = Math.max(Math.min(velocity * 2, Math.PI / 4), -Math.PI / 4);
+
+            // Obstacle management
+            const time = Date.now() * 0.001;
+            if (time - lastObstacleTime > obstacleSpawnInterval) {
+                createObstacle();
+                lastObstacleTime = time;
+            }
+
+            // Update obstacles
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                
+                // Move obstacles
+                obs.top.position.x -= obstacleSpeed;
+                obs.bottom.position.x -= obstacleSpeed;
+
+                // Animate dancing Elons
+                const danceTime = time + obs.animationOffset;
+                updateElonAnimation(obs.top, danceTime, obs.animationOffset);
+                updateElonAnimation(obs.bottom, danceTime, obs.animationOffset);
+
+                // Collision detection
+                const truckBox = new THREE.Box3().setFromObject(truckGroup);
+                const topBox = new THREE.Box3().setFromObject(obs.top);
+                const bottomBox = new THREE.Box3().setFromObject(obs.bottom);
+
+                if (truckBox.intersectsBox(topBox) || truckBox.intersectsBox(bottomBox)) {
+                    endGame();
+                }
+
+                // Score when passing obstacles
+                if (!obs.scored && obs.top.position.x < truckGroup.position.x) {
+                    score++;
+                    scoreElement.textContent = `Score: ${score}`;
+                    obs.scored = true;
+                }
+
+                // Cleanup far away obstacles
+                if (obs.top.position.x < cleanupThreshold) {
+                    scene.remove(obs.top, obs.bottom);
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Boundary check
+            if (truckGroup.position.y < -10 || truckGroup.position.y > 10) {
+                endGame();
+            }
+        }
+
+        renderer.render(scene, camera);
+    }
+
+    function endGame() {
+        gameOver = true;
+        gameOverElement.style.display = 'block';
+        
+        // Update high score if current score is higher
+        if (score > highScore) {
+            highScore = score;
+            localStorage.setItem('flappyTruckHighScore', highScore);
+            highScoreElement.textContent = `Best: ${highScore}`;
+        }
+    }
+
+    function resetGame() {
+        // Remove all obstacles
+        obstacles.forEach(obs => {
+            scene.remove(obs.top, obs.bottom);
+        });
+        obstacles.length = 0;
+        
+        // Reset truck position and rotation
+        truckGroup.position.y = 0;
+        truckGroup.rotation.z = 0;
+        velocity = 0;
+        
+        // Reset game state
+        gameOver = false;
+        gameStarted = false;
+        score = 0;
+        scoreElement.textContent = `Score: ${score}`;
+        scoreElement.style.display = 'none';
+        highScoreElement.style.display = 'block';  // Always show high score
+        gameOverElement.style.display = 'none';
+        startScreenElement.style.display = 'block';
+    }
+
+    // Update the animation to include Trump's characteristic movements
+    function updateElonAnimation(trump, time, offset) {
+        // Gentle floating motion
+        trump.position.y += Math.sin(time * 2) * 0.02;
+        
+        // Hair movement
+        trump.children[2].rotation.z = Math.PI * 0.05 + Math.sin(time * 2) * 0.1;  // Hair top
+        trump.children[3].rotation.z = Math.PI * 0.15 + Math.sin(time * 2) * 0.1;  // Hair sweep
+        
+        // Arm movements - characteristic gestures
+        trump.children[5].rotation.z = Math.PI * 0.15 + Math.sin(time * 2) * 0.3;  // Left arm
+        trump.children[6].rotation.z = -Math.PI * 0.15 + Math.sin(time * 2 + Math.PI) * 0.3;  // Right arm
+        
+        // Hand movements
+        trump.children[7].position.y = Math.sin(time * 2) * 0.1;  // Left hand
+        trump.children[8].position.y = Math.sin(time * 2 + Math.PI) * 0.1;  // Right hand
+        
+        // Subtle body sway
+        trump.children[0].rotation.z = Math.sin(time * 1.5) * 0.05;  // Body
+    }
+
+    // Start game
+    animate();
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
