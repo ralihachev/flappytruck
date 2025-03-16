@@ -113,13 +113,15 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Set camera position
+    // Set initial camera position
     camera.position.z = 15;  // Base camera position
     camera.position.y = 0;   // Centered vertically
     camera.position.x = 0;   // Centered horizontally
 
-    // Detect mobile and orientation
+    // Detect mobile
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    // Will be called after truck creation
     function adjustForMobile() {
         if (isMobile) {
             const isPortrait = window.innerHeight > window.innerWidth;
@@ -131,10 +133,11 @@
                 camera.fov = 75;         // Normal field of view
             }
             camera.updateProjectionMatrix();
-            truckGroup.scale.set(1.2, 1.2, 1.2);  // Make truck bigger on mobile
+            if (truckGroup) {
+                truckGroup.scale.set(1.2, 1.2, 1.2);  // Make truck bigger on mobile
+            }
         }
     }
-    adjustForMobile();
 
     // Starry background
     const starsGeometry = new THREE.BufferGeometry();
@@ -227,6 +230,9 @@
 
     truckGroup.position.set(-6, 0, 0);  // Move truck closer to center
     scene.add(truckGroup);
+
+    // Now that truck is created, adjust for mobile
+    adjustForMobile();
 
     // Add lighting
     const ambientLight = new THREE.AmbientLight(0x808080, 1);  // Brighter ambient light
@@ -802,6 +808,25 @@
             velocity = jump * (isMobile ? 0.9 : 1);  // Slightly reduced jump on mobile
         }
     }, { passive: false });
+
+    // Prevent all default touch behaviors that might interfere
+    document.addEventListener('touchmove', (event) => {
+        event.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchend', (event) => {
+        event.preventDefault();
+    }, { passive: false });
+
+    // Also update the start screen instructions for mobile
+    if (isMobile) {
+        const instructions = document.getElementById('instructions');
+        instructions.innerHTML = `
+            Tap anywhere to fly<br>
+            Avoid the Trump obstacles<br>
+            Tap to start
+        `;
+    }
 
     function startGame() {
         gameStarted = true;
