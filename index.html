@@ -55,14 +55,33 @@
             transform: translate(-50%, -50%);
             color: white;
             font-family: Arial, sans-serif;
-            font-size: 32px;
+            font-size: min(32px, 6vw);  /* Responsive font size */
             text-align: center;
             z-index: 100;
             display: none;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
         }
         #instructions {
-            font-size: 20px;
+            font-size: min(20px, 4vw);  /* Responsive font size */
             margin-top: 20px;
+        }
+        /* Mobile-specific instructions */
+        .mobile-instructions {
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .desktop-instructions { display: none; }
+            .mobile-instructions { display: block; }
+            #gameOver, #startScreen {
+                padding: min(20px, 4vh) min(20px, 4vw);
+                width: 85%;
+                background: rgba(0, 0, 0, 0.85);  /* Darker background for better visibility */
+            }
         }
     </style>
 </head>
@@ -74,7 +93,8 @@
     <div id="highScore">Best: 0</div>
     <div id="gameOver">
         Game Over!<br>
-        Press R to restart
+        <span class="desktop-instructions">Press R to restart</span>
+        <span class="mobile-instructions">Tap to restart</span>
     </div>
     <div id="startScreen">
         Cybertruck Space Flappy<br>
@@ -94,9 +114,27 @@
     document.body.appendChild(renderer.domElement);
 
     // Set camera position
-    camera.position.z = 15;  // Moved camera back
+    camera.position.z = 15;  // Base camera position
     camera.position.y = 0;   // Centered vertically
     camera.position.x = 0;   // Centered horizontally
+
+    // Detect mobile and orientation
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    function adjustForMobile() {
+        if (isMobile) {
+            const isPortrait = window.innerHeight > window.innerWidth;
+            if (isPortrait) {
+                camera.position.z = 25;  // Move camera much further back in portrait
+                camera.fov = 85;         // Wider field of view
+            } else {
+                camera.position.z = 18;  // Slightly back in landscape
+                camera.fov = 75;         // Normal field of view
+            }
+            camera.updateProjectionMatrix();
+            truckGroup.scale.set(1.2, 1.2, 1.2);  // Make truck bigger on mobile
+        }
+    }
+    adjustForMobile();
 
     // Starry background
     const starsGeometry = new THREE.BufferGeometry();
@@ -187,7 +225,7 @@
     rightLight.position.set(1, -0.2, -0.4);
     truckGroup.add(rightLight);
 
-    truckGroup.position.set(-8, 0, 0);
+    truckGroup.position.set(-6, 0, 0);  // Move truck closer to center
     scene.add(truckGroup);
 
     // Add lighting
@@ -744,7 +782,7 @@
             if (!gameStarted) {
                 startGame();
             } else if (!gameOver) {
-                velocity = jump;
+            velocity = jump;
             }
             event.preventDefault();
         }
@@ -755,13 +793,15 @@
 
     // Touch controls for mobile
     document.addEventListener('touchstart', (event) => {
+        event.preventDefault();  // Prevent default touch behavior
         if (!gameStarted) {
             startGame();
-        } else if (!gameOver) {
-            velocity = jump;
+        } else if (gameOver) {
+            resetGame();
+        } else {
+            velocity = jump * (isMobile ? 0.9 : 1);  // Slightly reduced jump on mobile
         }
-        event.preventDefault();
-    });
+    }, { passive: false });
 
     function startGame() {
         gameStarted = true;
@@ -916,6 +956,7 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+        adjustForMobile();  // Adjust camera for new orientation
     });
 </script>
 </body>
